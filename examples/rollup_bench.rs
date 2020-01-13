@@ -10,7 +10,9 @@ use bellman_bignat::rollup::{rsa, merkle};
 use bellman_bignat::hash::hashes::Poseidon;
 use docopt::Docopt;
 use sapling_crypto::jubjub::JubjubBls12;
+use sapling_crypto::alt_babyjubjub::AltJubjubBn256;
 use sapling_crypto::bellman::pairing::bls12_381::Bls12;
+use sapling_crypto::bellman::pairing::bn256::Bn256;
 use sapling_crypto::bellman::Circuit;
 use serde::Deserialize;
 
@@ -47,7 +49,7 @@ fn main() {
     let (set, constraints) = if args.cmd_rsa {
         (
             "rsa",
-            rsa_bench(args.arg_transactions, args.arg_capacity, args.flag_profile),
+            rsa_bn256_bench(args.arg_transactions, args.arg_capacity, args.flag_profile),
         )
     } else if args.cmd_merkle {
         (
@@ -62,6 +64,26 @@ fn main() {
             "{},{},{},{}",
             set, args.arg_transactions, args.arg_capacity, constraints
         );
+    }
+}
+
+fn rsa_bn256_bench(t: usize, _c: usize, profile: bool) -> usize {
+    let circuit = rsa::RollupBench::<Bn256, Poseidon<Bn256>>::from_counts(
+        t,
+        t,
+        AltJubjubBn256::new(),
+        Poseidon::default(),
+    );
+
+    if profile {
+        let mut cs = ConstraintProfiler::new();
+        circuit.synthesize(&mut cs).expect("synthesis failed");
+        cs.emit_as_json(&mut std::io::stdout()).unwrap();
+        cs.num_constraints()
+    } else {
+        let mut cs = ConstraintCounter::new();
+        circuit.synthesize(&mut cs).expect("synthesis failed");
+        cs.num_constraints()
     }
 }
 
